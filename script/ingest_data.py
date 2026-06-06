@@ -19,10 +19,10 @@ def ingest_all_sources():
     
     # Masukkan URL web dan path file lokal (relatif atau absolut) ke dalam list ini
     sources = [
-        "https://kalbenutritionals.com/en/health-corner/ternyata-sarapan-favorit-orang-indonesia-masih-rendah-serat",
-        "https://www.alodokter.com/pilihan-menu-sarapan-sehat-agar-tubuh-berenergi",
-        "https://hellosehat.com/nutrisi/fakta-gizi/porsi-sarapan-yang-ideal/",
-        "https://www.emc.id/id/care-plus/inilah-komposisi-zat-gizi-yang-penting-dikonsumsi-saat-sarapan",
+        # "https://kalbenutritionals.com/en/health-corner/ternyata-sarapan-favorit-orang-indonesia-masih-rendah-serat",
+        # "https://www.alodokter.com/pilihan-menu-sarapan-sehat-agar-tubuh-berenergi",
+        # "https://hellosehat.com/nutrisi/fakta-gizi/porsi-sarapan-yang-ideal/",
+        # "https://www.emc.id/id/care-plus/inilah-komposisi-zat-gizi-yang-penting-dikonsumsi-saat-sarapan",
         "https://www.andrafarm.com/_andra.php?_i=daftar-tkpi",
         "https://www.panganku.org/id-ID/semua_nutrisi",
         "data/nutrition.csv"

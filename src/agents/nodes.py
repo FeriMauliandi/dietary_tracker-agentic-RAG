@@ -4,7 +4,7 @@ from langchain_core.prompts import PromptTemplate
 
 from src.agents.state import DietaryTrackerState
 from src.core.config import settings
-from src.database.vector_store import get_hybrid_retriever
+from src.database.vector_store import get_retriever
 from src.tools.nutrition_api import fetch_nutrition_data
 
 llm = ChatGroq(
@@ -12,7 +12,7 @@ llm = ChatGroq(
     temperature=0, 
 )
 
-retriever = get_hybrid_retriever(k=3)
+retriever = get_retriever(llm, final_k=3, fetch_k=3)
 
 def extraction_node(state: DietaryTrackerState) -> Dict[str, Any]:
     print("🤖 [Extraction Node] Sedang mengekstrak entitas...")
