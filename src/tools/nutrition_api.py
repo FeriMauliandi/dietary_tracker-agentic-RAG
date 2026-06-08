@@ -76,7 +76,7 @@ def get_usda_item(item_name: str) -> Dict[str, Any]:
     return {"found": False}
 
 # --- FUNGSI UTAMA (GABUNGAN) ---
-def fetch_combined_nutrition_data(items: List[str]) -> Dict[str, Any]:
+def fetch_combined_nutrition_data(items_data: List[Dict[str, str]]) -> Dict[str, Any]:
     print(f"[Tool] Memulai pencarian gabungan (FatSecret + USDA Fallback)...")
     token = get_fatsecret_token()
     
@@ -85,27 +85,35 @@ def fetch_combined_nutrition_data(items: List[str]) -> Dict[str, Any]:
     total_carbs = 0.0
     found_items_log = []
 
-    # Looping langsung menggunakan string dari list
-    for item in items:
-        # 1. Coba FatSecret dulu
-        result = get_fatsecret_item(item, token)
+    # Looping menggunakan list of dictionaries
+    for item_dict in items_data:
+        # Pengecekan tipe data jaga-jaga jika ada input kotor
+        if isinstance(item_dict, str):
+            nama_asli = item_dict
+            nama_inggris = item_dict
+        else:
+            nama_asli = item_dict.get("asli", "")
+            nama_inggris = item_dict.get("english", "")
+            
+        # 1. Coba FatSecret dulu (Bahasa Indonesia)
+        result = get_fatsecret_item(nama_asli, token)
         
-        # 2. Jika gagal di FatSecret, Fallback ke USDA (tetap menggunakan string yang sama)
+        # 2. Jika gagal di FatSecret, Fallback ke USDA (Bahasa Inggris)
         if not result["found"]:
-            print(f"🔄 '{item}' tidak ditemukan di FatSecret. Beralih ke USDA...")
-            result = get_usda_item(item)
+            print(f"🔄 '{nama_asli}' tidak ditemukan di FatSecret. Beralih ke USDA dengan kueri '{nama_inggris}'...")
+            result = get_usda_item(nama_inggris)
             
         # 3. Kalkulasi hasil akhir
         if result["found"]:
             total_calories += result["cal"]
             total_protein += result["pro"]
             total_carbs += result["car"]
-            found_items_log.append(f"{item} ({result['cal']} kkal dari {result['source']})")
+            found_items_log.append(f"{nama_asli} ({result['cal']} kkal dari {result['source']})")
         else:
-            found_items_log.append(f"{item} (Tidak ditemukan di kedua database)")
+            found_items_log.append(f"{nama_asli} (Tidak ditemukan)")
 
     summary_text = (
-        f"Data diekstraksi untuk {len(items)} item. "
+        f"Data diekstraksi untuk {len(items_data)} item. "
         f"Status: {', '.join(found_items_log)}. "
         f"Estimasi Total: {total_calories:.1f} Kalori, {total_protein:.1f}g Protein, {total_carbs:.1f}g Karbohidrat."
     )

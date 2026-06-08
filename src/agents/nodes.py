@@ -1,4 +1,5 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
+from pydantic import BaseModel, Field
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 
@@ -12,19 +13,36 @@ llm = ChatGroq(
     temperature=0, 
 )
 
-retriever = get_retriever(llm, final_k=3, fetch_k=3)
+retriever = get_retriever(final_k=3)
 
+class FoodItem(BaseModel):
+    asli: str = Field(description="Nama makanan/minuman dalam bahasa Indonesia")
+    english: str = Field(description="Terjemahan bahasa Inggris (misal: 'ayam bakar' -> 'grilled chicken')")
+
+class ExtractionResult(BaseModel):
+    items: List[FoodItem] = Field(description="Daftar item yang diekstrak")
+
+# --- NODES ---
 def extraction_node(state: DietaryTrackerState) -> Dict[str, Any]:
-    print("[Extraction Node] Sedang mengekstrak entitas...")
+    print("[Extraction Node] Sedang mengekstrak dan menerjemahkan entitas...")
+    
+    structured_llm = llm.with_structured_output(ExtractionResult)
+    
     prompt = PromptTemplate.from_template(
-        "Kamu adalah asisten ahli gizi. Ekstrak nama makanan dan minuman dari teks berikut.\n"
-        "Keluarkan HANYA daftar item yang dipisahkan dengan koma, tanpa penjelasan lain.\n"
-        "Teks: {user_input}"
+        "Kamu adalah asisten ahli gizi bilingual. Ekstrak nama makanan dan minuman dari teks berikut.\n\n"
+        "Teks: {user_input}\n\n"
+        "Tugas:\n"
+        "1. Ambil nama makanan dalam bahasa aslinya (Indonesia).\n"
+        "2. Berikan terjemahan bahasa Inggris yang akurat untuk pencarian database USDA."
     )
-    chain = prompt | llm
+    
+    chain = prompt | structured_llm
     response = chain.invoke({"user_input": state["user_input"]})
-    items = [item.strip() for item in response.content.split(",")]
-    return {"extracted_items": items}
+    
+    extracted_data = [{"asli": item.asli, "english": item.english} for item in response.items]
+    
+    print(f"[Extraction Node] Hasil: {extracted_data}")
+    return {"extracted_items": extracted_data}
 
 def api_tool_node(state: DietaryTrackerState) -> Dict[str, Any]:
     print("[API Tool Node] Mengambil data makronutrien (FatSecret & USDA)...")
@@ -33,7 +51,7 @@ def api_tool_node(state: DietaryTrackerState) -> Dict[str, Any]:
     if not items_data:
         return {"nutrition_data": {"summary": "Tidak ada data makanan untuk dianalisis."}}
     
-    # Langsung lempar raw list of dictionaries ke fungsi gabungan
+    # Lempar dictionary yang berisi versi Indo & English ke fungsi API
     nutrition_result = fetch_combined_nutrition_data(items_data)
     
     print(f"[API Tool Node] Hasil nutrisi akhir: {nutrition_result}")
@@ -41,15 +59,24 @@ def api_tool_node(state: DietaryTrackerState) -> Dict[str, Any]:
 
 def rag_node(state: DietaryTrackerState) -> Dict[str, Any]:
     print("[RAG Node] Melakukan Hybrid Search (BM25 + Vector) di database...")
-    user_input = state["user_input"]
+    items_data = state.get("extracted_items", [])
+    
+    # RAG hanya butuh bahasa aslinya (Indonesia) untuk dicari di database lokalmu
+    if items_data:
+        nama_asli_list = [item["asli"] for item in items_data]
+        search_query = " ".join(nama_asli_list)
+    else:
+        search_query = state.get("user_input", "") 
+        
+    print(f"[RAG Node] Kueri pencarian diubah menjadi: '{search_query}'")
     
     try:
-        docs = retriever.invoke(user_input)
+        docs = retriever.invoke(search_query)
         context = "\n\n".join(doc.page_content for doc in docs)
         
         if not context:
             context = "Tidak ada literatur spesifik yang ditemukan di database."
-        
+            
         print(f"[RAG Node] Literatur yang ditemukan:\n{context}\n ================================")
         return {"literature_context": context}
     except Exception as e:
@@ -58,6 +85,11 @@ def rag_node(state: DietaryTrackerState) -> Dict[str, Any]:
 
 def synthesizer_node(state: DietaryTrackerState) -> Dict[str, Any]:
     print("[Synthesizer Node] Merumuskan analisis akhir...")
+    
+    items_data = state.get("extracted_items", [])
+    # Ekstrak nama asli agar LLM menjawab pengguna dengan bahasa Indonesia
+    nama_asli_list = [item["asli"] for item in items_data]
+    
     prompt = PromptTemplate.from_template(
         "Kamu adalah konsultan kebugaran dan nutrisi berbasis sains.\n\n"
         "Input Asli Pengguna: '{user_input}'\n"
@@ -65,16 +97,15 @@ def synthesizer_node(state: DietaryTrackerState) -> Dict[str, Any]:
         "Data Nutrisi (Estimasi): {nutrition}\n"
         "Literatur nutrisi Pendukung: {context}\n\n"
         "Tugas Utama:\n"
-        "1. Berikan analisis nutrisi per item secara singkat dan perhatikan jumlah item.\n"
+        "1. Berikan analisis nutrisi per item secara singkat.\n"
         "2. Jelaskan apakah asupannya sudah ideal DENGAN MEMPERHATIKAN KONTEKS WAKTU MAKAN.\n"
         "Gunakan bahasa Indonesia yang profesional dan ringkas. Beri saran pelengkap jika perlu."
     )
     chain = prompt | llm
     
-    # Kita tambahkan user_input ke dalam dictionary invoke
     response = chain.invoke({
-        "user_input": state.get("user_input", ""), # <-- Mengambil konteks asli
-        "items": ", ".join(state.get("extracted_items", [])),
+        "user_input": state.get("user_input", ""),
+        "items": ", ".join(nama_asli_list),
         "nutrition": state.get("nutrition_data", {}).get("summary", "Data tidak tersedia"),
         "context": state.get("literature_context", "Tidak ada referensi.")
     })

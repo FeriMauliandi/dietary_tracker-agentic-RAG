@@ -33,7 +33,6 @@ def read_root():
 async def analyze_diet(request: DietRequest):
     print(f"📥 Menerima request analisis untuk: {request.user_input}")
     
-    # 1. Siapkan initial state untuk LangGraph
     initial_state = {
         "user_input": request.user_input,
         "extracted_items": [],
@@ -44,18 +43,21 @@ async def analyze_diet(request: DietRequest):
     }
     
     try:
-        # 2. Eksekusi workflow LangGraph
-        # .invoke() bersifat sinkron (blocking). 
-        # Untuk skalabilitas masa depan, LangGraph juga mendukung .ainvoke() (asynchronous)
         result_state = ai_agent_app.invoke(initial_state)
-        
-        # 3. Kembalikan response yang sudah difilter sesuai schema
+    
+        items_list = []
+        for item in result_state.get("extracted_items", []):
+            if isinstance(item, dict):
+                items_list.append(item.get("asli", ""))
+            else:
+                items_list.append(item)
+
+        # Kembalikan response
         return DietResponse(
-            extracted_items=result_state.get("extracted_items", []),
-            final_analysis=result_state.get("final_analysis", "Gagal menghasilkan analisis.")
+            final_analysis=result_state["final_analysis"],
+            extracted_items=items_list, 
         )
         
     except Exception as e:
-        print(f"❌ Error saat memproses graph: {e}")
-        # Kembalikan HTTP 500 jika terjadi fatal error di dalam LangGraph
+        print(f"error saat memproses graph: {e}")
         raise HTTPException(status_code=500, detail="Terjadi kesalahan internal pada agen AI.")

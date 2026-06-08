@@ -19,7 +19,6 @@ def ingest_all_sources():
     
     # Masukkan URL web dan path file lokal (relatif atau absolut) ke dalam list ini
     sources = [
-        "https://www.andrafarm.com/_andra.php?_i=daftar-tkpi",
         "data/nutrition.csv"
     ]
     
@@ -29,7 +28,6 @@ def ingest_all_sources():
 
     all_documents = []
     
-    # Looping semua sumber menggunakan loader.py milikmu
     for source in sources:
         try:
             docs = load_data(source)
@@ -47,9 +45,9 @@ def ingest_all_sources():
     chunks = text_splitter.split_documents(all_documents)
     
     # Embedding & Penyimpanan ke ChromaDB
-    print("🤖 Memulai proses embedding dan penyimpanan...")
+    print("Memulai proses embedding dan penyimpanan...")
     embeddings = HuggingFaceEmbeddings(
-        model_name="LazarusNLP/all-indo-e5-small-v4", 
+        model_name=settings.EMBEDDING_MODEL,
         model_kwargs={"device": "cuda" if torch.cuda.is_available() else "cpu"}
     )
     
