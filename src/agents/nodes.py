@@ -5,7 +5,7 @@ from langchain_core.prompts import PromptTemplate
 from src.agents.state import DietaryTrackerState
 from src.core.config import settings
 from src.database.vector_store import get_retriever
-from src.tools.nutrition_api import fetch_nutrition_data
+from src.tools.nutrition_api import fetch_combined_nutrition_data
 
 llm = ChatGroq(
     model=settings.LLM_MODEL,
@@ -15,7 +15,7 @@ llm = ChatGroq(
 retriever = get_retriever(llm, final_k=3, fetch_k=3)
 
 def extraction_node(state: DietaryTrackerState) -> Dict[str, Any]:
-    print("🤖 [Extraction Node] Sedang mengekstrak entitas...")
+    print("[Extraction Node] Sedang mengekstrak entitas...")
     prompt = PromptTemplate.from_template(
         "Kamu adalah asisten ahli gizi. Ekstrak nama makanan dan minuman dari teks berikut.\n"
         "Keluarkan HANYA daftar item yang dipisahkan dengan koma, tanpa penjelasan lain.\n"
@@ -27,13 +27,16 @@ def extraction_node(state: DietaryTrackerState) -> Dict[str, Any]:
     return {"extracted_items": items}
 
 def api_tool_node(state: DietaryTrackerState) -> Dict[str, Any]:
-    print("[API Tool Node] Mengambil data makronutrien dari USDA...")
-    items = state.get("extracted_items", [])
-    if not items:
+    print("[API Tool Node] Mengambil data makronutrien (FatSecret & USDA)...")
+    items_data = state.get("extracted_items", [])
+    
+    if not items_data:
         return {"nutrition_data": {"summary": "Tidak ada data makanan untuk dianalisis."}}
     
-    nutrition_result = fetch_nutrition_data(items)
-    print(f"[API Tool Node] Hasil nutrisi: {nutrition_result}    ")
+    # Langsung lempar raw list of dictionaries ke fungsi gabungan
+    nutrition_result = fetch_combined_nutrition_data(items_data)
+    
+    print(f"[API Tool Node] Hasil nutrisi akhir: {nutrition_result}")
     return {"nutrition_data": nutrition_result}
 
 def rag_node(state: DietaryTrackerState) -> Dict[str, Any]:
@@ -62,12 +65,9 @@ def synthesizer_node(state: DietaryTrackerState) -> Dict[str, Any]:
         "Data Nutrisi (Estimasi): {nutrition}\n"
         "Literatur nutrisi Pendukung: {context}\n\n"
         "Tugas Utama:\n"
-        "1. Berikan analisis nutrisi per item secara singkat.\n"
-        "2. Jelaskan apakah asupannya sudah ideal DENGAN MEMPERHATIKAN KONTEKS WAKTU MAKAN pada 'Input Asli Pengguna'.\n"
-        "   - Jika pengguna hanya menyebut 'sarapan', 'makan siang', atau 1 sesi makan, evaluasilah target nutrisinya sebagai porsi satu kali makan (sekitar 1/3 dari kebutuhan harian).\n"
-        "   - JANGAN menyebut asupannya 'belum ideal untuk harian' jika dia memang baru makan satu kali.\n"
-        "   - Jika pengguna merangkum makanan seharian penuh, barulah evaluasi sebagai total asupan harian.\n\n"
-        "Gunakan bahasa Indonesia yang profesional, ramah, dan ringkas. Beri saran pelengkap jika ada nutrisi yang kurang dari sesi makan tersebut."
+        "1. Berikan analisis nutrisi per item secara singkat dan perhatikan jumlah item.\n"
+        "2. Jelaskan apakah asupannya sudah ideal DENGAN MEMPERHATIKAN KONTEKS WAKTU MAKAN.\n"
+        "Gunakan bahasa Indonesia yang profesional dan ringkas. Beri saran pelengkap jika perlu."
     )
     chain = prompt | llm
     

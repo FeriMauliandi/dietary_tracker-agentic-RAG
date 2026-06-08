@@ -6,9 +6,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 
-# Mengimpor fungsi load_data dari folder src.utils
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.utils.loader import load_data
+from src.core.config import settings
 
 load_dotenv()
 
@@ -19,12 +19,7 @@ def ingest_all_sources():
     
     # Masukkan URL web dan path file lokal (relatif atau absolut) ke dalam list ini
     sources = [
-        # "https://kalbenutritionals.com/en/health-corner/ternyata-sarapan-favorit-orang-indonesia-masih-rendah-serat",
-        # "https://www.alodokter.com/pilihan-menu-sarapan-sehat-agar-tubuh-berenergi",
-        "https://hellosehat.com/nutrisi/fakta-gizi/porsi-sarapan-yang-ideal/",
-        "https://www.emc.id/id/care-plus/inilah-komposisi-zat-gizi-yang-penting-dikonsumsi-saat-sarapan",
         "https://www.andrafarm.com/_andra.php?_i=daftar-tkpi",
-        "https://www.panganku.org/id-ID/semua_nutrisi",
         "data/nutrition.csv"
     ]
     
