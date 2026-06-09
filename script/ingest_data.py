@@ -19,7 +19,18 @@ def ingest_all_sources():
     
     # Masukkan URL web dan path file lokal (relatif atau absolut) ke dalam list ini
     sources = [
-        "data/nutrition.csv"
+        "data/nutrition.csv",
+        "https://ayosehat.kemkes.go.id/isi-piringku-kebutuhan-gizi-harian-seimbang",
+        "https://www.halodoc.com/artikel/ragam-makanan-khas-indonesia-yang-lezat-dan-bernutrisi",
+        "https://www.alodokter.com/5-makanan-yang-bisa-meningkatkan-kesehatan-jantung",
+        "https://www.halodoc.com/artikel/ini-kandungan-gizi-dalam-6-makanan-pokok-indonesia",
+        "https://www.halodoc.com/artikel/nutrisi-pengertian-dan-jenis-jenisnya-yang-perlu-diketahui",
+        "data/tentang_nutrisi.pdf",
+        "https://www.halodoc.com/kesehatan/makanan-sehat",
+        "https://www.halodoc.com/artikel/kebutuhan-nutrisi-harian-makan-enak-tetap-sehat",
+        "https://www.alodokter.com/9-manfaat-makan-buah-dan-aturan-sehat-mengonsumsinya",    
+
+
     ]
     
     if not sources:
@@ -41,7 +52,7 @@ def ingest_all_sources():
         return
 
     # Proses Chunking
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=150)
     chunks = text_splitter.split_documents(all_documents)
     
     # Embedding & Penyimpanan ke ChromaDB
@@ -57,7 +68,7 @@ def ingest_all_sources():
         persist_directory=CHROMA_DB_DIR
     )
     
-    print(f"🎉 Selesai! {len(chunks)} chunks tersimpan di ChromaDB.")
+    print(f"Selesai! {len(chunks)} chunks tersimpan di ChromaDB.")
 
 if __name__ == "__main__":
     ingest_all_sources()
