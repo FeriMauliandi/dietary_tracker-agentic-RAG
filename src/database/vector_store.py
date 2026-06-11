@@ -19,15 +19,9 @@ def get_hybrid_retriever(search_type="similarity", final_k=3):
         embedding_function=embeddings
     )
     
-    # 1. Hitung dokumen untuk Defensive Programming
-    db_data = vector_store.get()
-    num_docs = len(db_data.get('documents', [])) if db_data else 0
-    
-    if num_docs == 0:
-        print("⚠️ Peringatan: Database kosong. Menggunakan k=1 sebagai fallback.")
-        safe_k = 1
-    else:
-        safe_k = min(final_k, num_docs)
+    # Gunakan k langsung tanpa .get() untuk performa. 
+    # Chroma akan memberikan warning/error sendiri jika kosong, yang lebih efisien daripada pre-fetch.
+    safe_k = final_k
 
     # 2. Vector Retriever murni
     vector_retriever = vector_store.as_retriever(
@@ -35,24 +29,29 @@ def get_hybrid_retriever(search_type="similarity", final_k=3):
         search_kwargs={"k": safe_k}
     )
     
-    # 3. BM25 Retriever murni
-    if num_docs == 0:
-        return vector_retriever
+    # 3. BM25 Retriever (Gunakan try-except jika data kosong)
+    try:
+        # BM25 tetap butuh dokumen list, tapi sebaiknya di-cache atau dibatasi
+        # Untuk sementara tetap ambil dokumen tapi ini adalah area optimasi selanjutnya
+        db_data = vector_store.get()
+        if not db_data or not db_data['documents']:
+             return vector_retriever
+             
+        docs = [
+            Document(page_content=txt, metadata=meta or {}) 
+            for txt, meta in zip(db_data['documents'], db_data.get('metadatas', []))
+        ]
+        bm25_retriever = BM25Retriever.from_documents(docs)
+        bm25_retriever.k = safe_k
         
-    docs = [
-        Document(page_content=txt, metadata=meta or {}) 
-        for txt, meta in zip(db_data['documents'], db_data.get('metadatas', []))
-    ]
-    bm25_retriever = BM25Retriever.from_documents(docs)
-    bm25_retriever.k = safe_k
-    
-    # 4. Ensemble (BM25 diberi bobot lebih besar karena mencari entitas persis)
-    ensemble_retriever = EnsembleRetriever(
-        retrievers=[bm25_retriever, vector_retriever],
-        weights=[0.6, 0.4] # 60% mengandalkan kecocokan teks persis, 40% semantik
-    )
-    
-    return ensemble_retriever
+        ensemble_retriever = EnsembleRetriever(
+            retrievers=[bm25_retriever, vector_retriever],
+            weights=[0.6, 0.4]
+        )
+        return ensemble_retriever
+    except Exception as e:
+        print(f"Fallback to pure vector search: {e}")
+        return vector_retriever
 
 def get_advanced_retriever(llm, search_type="similarity", final_k=3, fetch_k=5):
     print("Menyiapkan Advanced Retriever (MultiQuery + Hybrid + Reranker) untuk General Chat...")
@@ -85,7 +84,7 @@ def get_advanced_retriever(llm, search_type="similarity", final_k=3, fetch_k=5):
     
     multi_query_retriever = MultiQueryRetriever.from_llm(retriever=base_retriever, llm=llm)
     
-    cross_encoder = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base", model_kwargs={"device": device})
+    cross_encoder = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-v2-m3", model_kwargs={"device": device})
     compressor = CrossEncoderReranker(model=cross_encoder, top_n=safe_final_k)
     
     final_retriever = ContextualCompressionRetriever(

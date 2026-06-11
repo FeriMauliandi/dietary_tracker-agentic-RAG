@@ -20,6 +20,9 @@ berdasarkan input teks natural dan literatur jurnal medis.
 # Inisialisasi riwayat obrolan di session state Streamlit
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "session_id" not in st.session_state:
+    import uuid
+    st.session_state.session_id = str(uuid.uuid4())
 
 # Menampilkan riwayat obrolan di layar
 for message in st.session_state.messages:
@@ -42,8 +45,11 @@ if prompt := st.chat_input("Ceritakan apa yang baru saja Anda makan/minum..."):
             try:
                 response = requests.post(
                     API_URL, 
-                    json={"user_input": prompt},
-                    timeout=60 # Timeout 30 detik untuk menunggu LLM
+                    json={
+                        "user_input": prompt,
+                        "session_id": st.session_state.session_id
+                    },
+                    timeout=60 # Timeout 60 detik untuk menunggu LLM
                 )
                 
                 if response.status_code == 200:
@@ -52,9 +58,13 @@ if prompt := st.chat_input("Ceritakan apa yang baru saja Anda makan/minum..."):
                     # Mengambil data dari response FastAPI
                     extracted_items = data.get("extracted_items", [])
                     final_analysis = data.get("final_analysis", "")
+                    needs_clarification = data.get("needs_clarification", False)
                     
                     # Memformat jawaban akhir
-                    formatted_response = f"**Item terdeteksi:** {', '.join(extracted_items)}\n\n---\n\n**Analisis Gizi & Literatur:**\n{final_analysis}"
+                    if needs_clarification:
+                         formatted_response = f"🔍 **Klarifikasi:**\n{final_analysis}"
+                    else:
+                         formatted_response = f"**Item terdeteksi:** {', '.join(extracted_items)}\n\n---\n\n**Analisis Gizi & Literatur:**\n{final_analysis}"
                     
                     # Menampilkan jawaban di layar
                     st.markdown(formatted_response)
